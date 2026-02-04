@@ -4,7 +4,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/Code_License-MIT-blue" alt="license"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Model_License-MIT-blue" alt="license"></a>
   <!-- TODO: replace with your paper link -->
-  <a href="https://arxiv.org/abs/XXXX.XXXXX" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" alt="arXiv"></a>
+  <a href="https://arxiv.org/pdf/2602.03419" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" alt="arXiv"></a>
   <!-- TODO: replace with your HF collection/model link if any -->
   <a href="https://huggingface.co/" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-blue?color=8A2BE2"></a>
 </div>
@@ -14,9 +14,9 @@
 ---
 
 ## ✨ News
-+ [4 Feb 2026] ⚡️⚡️ [**SWE-Master**](https://arxiv.org/abs/2503.05592): We introduce SWE-Master, a fully reproducible post-training framework for Qwen2.5-Coder-32B that integrates agentic SFT and RL to achieve 61.4% (Pass@1) and 70.8% (TTS@8) resolve rates on SWE-bench Verified. Meanwhile, the framework incorporates IDE-level capabilities during inference via LSP-driven tool.
-+ [4 Feb 2026] ⚡️⚡️ [**SWE-World**](https://arxiv.org/abs/2503.05592): We introduce SWE-World, a fully Docker-free framework that replaces physical execution environments with learned surrogates. It lifts Qwen2.5-Coder-32B from 6.2% to 55.0% on SWE-bench Verified via fully Docker-free agentic SFT and RL, and further attains 68.2% through test-time scaling (TTS@8).
++ [4 Feb 2026] ⚡️⚡️ [**SWE-World**](https://arxiv.org/pdf/2602.03419): We introduce SWE-World, a fully Docker-free framework that replaces physical execution environments with learned surrogates. It lifts Qwen2.5-Coder-32B from 6.2% to 55.0% on SWE-bench Verified via fully Docker-free agentic SFT and RL, and further attains 68.2% through test-time scaling (TTS@8).
 
++ [4 Feb 2026] ⚡️⚡️ [**SWE-Master**](https://arxiv.org/pdf/2602.03411): We introduce SWE-Master, a fully reproducible post-training framework for Qwen2.5-Coder-32B that integrates agentic SFT and RL to achieve 61.4% (Pass@1) and 70.8% (TTS@8) resolve rates on SWE-bench Verified. Meanwhile, the framework incorporates IDE-level capabilities during inference via LSP-driven tool.
 ---
 
 ## 💡 Overview
@@ -118,4 +118,21 @@ The training and inference frameworks are currently undergoing internal corporat
 If you find SWE-World useful, please cite our paper:
 
 ```bibtex
+@misc{sun2026sweworldbuildingsoftwareengineering,
+      title={SWE-World: Building Software Engineering Agents in Docker-Free Environments}, 
+      author={Shuang Sun and Huatong Song and Lisheng Huang and Jinhao Jiang and Ran Le and Zhihao Lv and Zongchao Chen and Yiwen Hu and Wenyang Luo and Wayne Xin Zhao and Yang Song and Hongteng Xu and Tao Zhang and Ji-Rong Wen},
+      year={2026},
+      eprint={2602.03419},
+      archivePrefix={arXiv},
+      primaryClass={cs.SE},
+      url={https://arxiv.org/abs/2602.03419}, 
+}
+```
 
+## 📄 License
+
+This project is released under the [MIT License](LICENSE).
+
+## 📞 Contact
+
+For any questions or feedback, please reach out to us at [sunshuang@ruc.edu.cn](sunshuang@ruc.edu.cn).
