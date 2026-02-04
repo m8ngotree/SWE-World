@@ -42,8 +42,8 @@ SWE-World has two parts: **(1) Build SWE-World** (train world models), and **(2)
 
 ### 1) Build SWE-World
 - **Sandbox**: executes Navigation & Editing actions (e.g., `ls`, `cat`, `grep`, `str_replace`).
-- **SWT (Transition Model):** predicts step-level execution feedback (e.g., stdout/stderr/exit status) for code execution commands.
-- **SWR (Reward Model):** replaces containerized unit-test runs at the end of a trajectory; it generates a structured test report and outputs a binary reward.
+- **SWT (SWE-World Transition Model):** predicts step-level execution feedback (e.g., stdout/stderr/exit status) for code execution commands.
+- **SWR (SWE-World Reward Model):** replaces containerized unit-test runs at the end of a trajectory; it generates a structured test report and outputs a binary reward.
 
 
 ### 2) Train SWE Agents with SWE-World (Docker-Free SFT & RL)
@@ -68,8 +68,8 @@ Our fully Docker-free pipeline substantially improves strong open-source backbon
 
 ### Performance of SWT and SWR
 
-- **SWT (Transition):** SWT-72B best closes the sim-to-real gap, supporting **60.2%** resolve rate for Minmax M2.1, higher than GLM-4.7 (**59.4%**) and Minmax-M2.1 (**56.2%**).
-- **SWR (Reward):** SWR-32B is strong and precise (Acc **0.754**, Prec **0.779**). Scaling to SWR-72B further improves (Acc **0.770**, Prec **0.780**), yielding the best comprehensive reward simulation.
+- **SWT:** SWT-72B best closes the sim-to-real gap, supporting **60.2%** resolve rate for Minmax M2.1, higher than GLM-4.7 (**59.4%**) and Minmax-M2.1 (**56.2%**).
+- **SWR:** SWR-32B is strong and precise (Acc **0.754**, Prec **0.779**). Scaling to SWR-72B further improves (Acc **0.770**, Prec **0.780**), yielding the best comprehensive reward simulation.
 
 <p align="center">
   <img src="assets/fig2_performance_swt_swr.png" width="95%" alt="Performance of SWT and SWR">
