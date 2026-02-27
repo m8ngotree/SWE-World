@@ -1,0 +1,27 @@
+deepspeed --module openrlhf.cli.train_sft \
+   --max_len 81920 \
+   --dataset OpenRLHF_SFT/scripts/sft_data_demo.jsonl \
+   --input_key input \
+   --pretrain YOUR_MODEL_PATH \
+   --save_path OpenRLHF_SFT/output/demo \
+   --ckpt_path OpenRLHF_SFT/output/demo_ckpt \
+   --save_steps 40 \
+   --max_ckpt_num 3 \
+   --logging_steps 1 \
+   --train_batch_size 256 \
+   --micro_train_batch_size 1 \
+   --max_samples 1000000 \
+   --eval_steps -1 \
+   --zero_stage 3 \
+   --max_epochs 5 \
+   --packing_samples \
+   --bf16 \
+   --save_hf_ckpt \
+   --flash_attn \
+   --learning_rate 5e-5 \
+   --ring_attn_size 16 \
+   --ring_head_stride 2 \
+   --gradient_checkpointing \
+   --apply_chat_template \
+   --multiturn \
+   --use_tensorboard OpenRLHF_SFT/tensorboard_log \

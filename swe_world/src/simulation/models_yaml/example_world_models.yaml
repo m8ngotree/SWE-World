@@ -1,0 +1,8 @@
+swt:
+  - model_name: "openai/GLM-4.7"
+    base_url: "YOUR_BASE_URL"
+    api_key: "YOUR_API_KEY"   
+swr:
+  - model_name: "openai/GLM-4.7"
+    base_url: "YOUR_BASE_URL"
+    api_key: "YOUR_API_KEY"   
