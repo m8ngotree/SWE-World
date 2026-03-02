@@ -6,7 +6,7 @@
   <!-- TODO: replace with your paper link -->
   <a href="https://arxiv.org/pdf/2602.03419" target="_blank"><img src="https://img.shields.io/badge/arXiv-b5212f.svg?logo=arxiv" alt="arXiv"></a>
   <!-- TODO: replace with your HF collection/model link if any -->
-  <a href="https://huggingface.co/" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-blue?color=8A2BE2"></a>
+  <a href="https://huggingface.co/collections/RUC-AIBOX/swe-agent-series" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-blue?color=8A2BE2"></a>
 </div>
 
 <h5 align="center">If you like our project, please give us a star ⭐ on GitHub for the latest update.</h5>
