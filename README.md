@@ -161,7 +161,7 @@ source $HOME/.local/bin/env
 # Activate venv
 cd SWE-World/swe_world
 
-uv venv
+uv venv --python 3.10
 source .venv/bin/activate
 uv pip install "setuptools<70" wheel
 uv sync && uv pip install -e .
@@ -174,17 +174,37 @@ uv pip install new_packages/swebench_fork_swerebench-4.0.3-py3-none-any.whl
 uv pip install new_packages/swesmith-0.0.7-py3-none-any.whl
 ```
 
+### Data Preparation
+
+Before running SWE-World, the datasets and repositories need to be prepared.  
+The data preparation pipeline includes downloading raw SWE datasets, converting them into JSON format, cloning the required repositories with full commit history, and optionally generating cached specifications for efficient simulation.
+
+The main steps are:
+
+1. Download raw SWE datasets  
+2. Convert datasets from Parquet to JSON format  
+3. (Optional) Convert R2E datasets into SWE-Bench style  
+4. Clone required repositories with full commit history  
+5. Link dataset instances with local repositories  
+6. (Optional) Generate cached test specifications
+
+📌 Detailed instructions can be found in  
+[`data_preparation/README.md`](./data_preparation/README.md).
+
 ### Inference
 
 ```bash
 # run with world models
-bash ./swe_world/scripts/run_mode_simulated.sh
+# 1. launch world models
+bash scripts/launch_world_models.sh
+# 2. run inference
+bash scripts/run_mode_simulated.sh
 
 # run with docker
-bash ./swe_world/scripts/run_mode_docker.sh
+bash scripts/run_mode_docker.sh
 
 # run for collecting world model training data
-bash ./swe_world/scripts/run_mode_collect.sh
+bash scripts/run_mode_collect.sh
 
 ```
 
