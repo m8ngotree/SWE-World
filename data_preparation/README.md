@@ -94,24 +94,24 @@ This step links dataset entries with their corresponding local repositories.
 
 ---
 
-# 7. (Optional) Generate Cached Test Specifications
+# 7. (Optional) Offline Unit Test Generation (Optional)
+Generate unit tests for `swe-gym`, `swebench-verified`, and `swe-rebench` to facilitate direct loading during evaluation. 
+This process generates two types of caches:
+1. JSON files for unit tests mapped to each `instance_id` within the specified `base_dir`.
+2. A dataset containing the `make_test_spec` field. 
 
-To speed up simulation and avoid downloading dependencies during inference, we pre-generate cached specifications for each task.
+During inference, the system first checks if the dataset contains the `make_test_spec` field, then checks for the cached directory in the workspace. If neither is found, it reverts to the default loading method.
 
-Scripts:
-
-```bash
-bash data_preparation/make_test_spec.sh
-```
-
-or
+**Note:** If `base_dir` is specified, you must update the corresponding `base_dir` in `./swe_world/src/r2egym/agenthub/runtime/docker.py`.
 
 ```bash
-python data_preparation/make_test_spec.py
-python data_preparation/make_test_spec_for_rl.py
+python data_preparation/make_test_spec.py \
+    --base_dir /your/custom/cache/path \
+    --data_file_path /your/path/to/data.json
 ```
 
-These scripts generate cached metadata required for efficient **simulation and reinforcement learning pipelines**.
+For a completed conversion demo, refer to: `./data_examples/inference_data/ood_data`
+The corresponding unit tests cache is located at: `./data_examples/inference_data/ood_data_unit_tests_cache
 
 ---
 

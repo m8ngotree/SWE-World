@@ -124,34 +124,31 @@ We provide side-by-side comparisons between real Docker outputs and SWT/SWR simu
 ## 🏃 Quick Start
 
 
-## Data Preparation
-### Data Download
-```bash
-bash ./data_preparation/download_swe_datasets.sh
-```
+### Data Preparation
 
-### Offline Unit Test Generation (Optional)
-Generate unit tests for `swe-gym`, `swebench-verified`, and `swe-rebench` to facilitate direct loading during evaluation. 
-This process generates two types of caches:
-1. JSON files for unit tests mapped to each `instance_id` within the specified `base_dir`.
-2. A dataset containing the `make_test_spec` field. 
-
-During inference, the system first checks if the dataset contains the `make_test_spec` field, then checks for the cached directory in the workspace. If neither is found, it reverts to the default loading method.
-
-**Note:** If `base_dir` is specified, you must update the corresponding `base_dir` in `./R2E-Gym/src/r2egym/agenthub/runtime/docker.py`.
+Before running SWE-World, the datasets and repositories need to be prepared.
 
 ```bash
-python ./data_preparation/make_test_spec.py \
-    --base_dir /your/custom/cache/path \
-    --data_file_path /your/path/to/data.json
+# 1. Download raw SWE datasets
+bash data_preparation/download_swe_datasets.sh
+
+# 2. Convert datasets from Parquet to JSON
+python data_preparation/merge_parquet_to_json.py
+
+# 3. Clone all required repositories with full commit history
+bash data_preparation/crawl_repos.sh
+
+# 4. Add local repository paths to dataset
+python data_preparation/add_local_dir.py
 ```
 
-For a completed conversion demo, refer to: `./data_examples/inference_data/ood_data`
-The corresponding unit tests cache is located at: `./data_examples/inference_data/ood_data_unit_tests_cache`
+📌 For the complete data preparation pipeline and optional steps, see
+[`data_preparation/README.md`](./data_preparation/README.md).
 
-## Inference & Evaluation
 
-### Environment Setup 
+### Inference & Evaluation
+
+#### Environment Setup 
 
 ```bash
 # Install uv
@@ -174,24 +171,9 @@ uv pip install new_packages/swebench_fork_swerebench-4.0.3-py3-none-any.whl
 uv pip install new_packages/swesmith-0.0.7-py3-none-any.whl
 ```
 
-### Data Preparation
 
-Before running SWE-World, the datasets and repositories need to be prepared.  
-The data preparation pipeline includes downloading raw SWE datasets, converting them into JSON format, cloning the required repositories with full commit history, and optionally generating cached specifications for efficient simulation.
 
-The main steps are:
-
-1. Download raw SWE datasets  
-2. Convert datasets from Parquet to JSON format  
-3. (Optional) Convert R2E datasets into SWE-Bench style  
-4. Clone required repositories with full commit history  
-5. Link dataset instances with local repositories  
-6. (Optional) Generate cached test specifications
-
-📌 Detailed instructions can be found in  
-[`data_preparation/README.md`](./data_preparation/README.md).
-
-### Inference
+#### Inference
 
 ```bash
 # run with world models
@@ -208,7 +190,7 @@ bash scripts/run_mode_collect.sh
 
 ```
 
-### Test Time Scaling
+#### Test Time Scaling
 
 We provide a fully Docker-free TTS pipeline based on SWR.
 
@@ -237,7 +219,7 @@ python ./swe_world/src/simulation/app/json_to_html.py [jsonl-file-path] -o [html
 For the demo data provided, the corresponding visualized HTML files are located at: `./data_examples/r2e-gym-inference-traj/glm46_0_used_swe_rebench_1_demo-en.html`
 
 
-## SFT World Models
+### SFT World Models
 
 This section describes how to prepare supervised fine-tuning (SFT) data for SWE-World **world models**, including:
 - **SWT (Transition Model):** simulates step-level execution feedback (stdout/stderr/exit status).
@@ -247,7 +229,7 @@ We provide scripts to (1) generate per-sample `initial_analysis`, (2) collect SF
 
 📌 **Detailed instructions:** see [`swe_world/src/simulation/world_model_sft_data/README.md`](./swe_world/src/simulation/world_model_sft_data/README.md).
 
-## SWE Agent SFT Training
+### SWE Agent SFT Training
 
 > [!IMPORTANT]
 > We utilize [OpenRLHF](https://github.com/OpenRLHF/OpenRLHF) as our framework for Supervised Fine-Tuning (SFT). It is an excellent open-source repository.
@@ -256,7 +238,7 @@ We provide scripts to (1) generate per-sample `initial_analysis`, (2) collect SF
 > Training was conducted on an internal platform with packages pre-installed in the environment image. The "Environment Setup" provided here aims to replicate our training environment as closely as possible. If you encounter issues, please open an **issue**, and we will investigate and resolve it promptly.
 
 
-### Environment Setup 
+#### Environment Setup 
 
 The packages required for the training environment are listed below and can be downloaded as needed:
 
@@ -274,7 +256,7 @@ cd OpenRLHF
 pip install -e .
 ```
 
-### Data Processing (Optional)
+#### Data Processing (Optional)
 You can directly process the trajectories generated via inference using the R2E-Gym framework by running the following scripts. This will convert them into an SFT-compatible format and apply necessary filtering:
 ```bash
 python ./OpenRLHF_SFT/SFT_data_pre_process/r2e_to_openrlhf_format/0_covert_r2e_format_to_sft_foramt.py
@@ -285,7 +267,7 @@ python ./OpenRLHF_SFT/SFT_data_pre_process/r2e_to_openrlhf_format/1_init_format_
 An example of SFT data is provided here for formatting reference: 
 `./data_examples/sft_data`
 
-### Training
+#### Training
 
 ```bash
 # Pre-tokenize multi-turn interaction trajectories and compute loss masks (Optional, but recommended to avoid training bottlenecks)
@@ -302,7 +284,7 @@ mv ./OpenRLHF_SFT/scripts_swe_master/sft_dataset.py ./OpenRLHF_SFT/datasets/
 bash ./OpenRLHF_SFT/scripts_swe_master/qwen_25_coder_32B_new_remove_01_not_dedep.sh
 ```
 
-## RL Training
+### RL Training
 
 > [!IMPORTANT]
 > Our development is built upon the open-source frameworks [DeepSWE](https://github.com/agentica-project/rllm) and [rLLM](https://github.com/rllm-org/rllm), both of which are highly recommended repositories.
@@ -311,7 +293,7 @@ bash ./OpenRLHF_SFT/scripts_swe_master/qwen_25_coder_32B_new_remove_01_not_dedep
 > Training was conducted on an internal platform with packages pre-installed in the environment image. The "Environment Setup" provided here aims to replicate our training environment as closely as possible. If you encounter issues, please open an **issue**, and we will investigate and resolve it promptly.
 
 
-### Environment Setup 
+#### Environment Setup 
 
 The packages required for the training environment are listed below and can be downloaded as needed:
 
@@ -334,7 +316,7 @@ Additionally, you must update the local paths for VeRL and R2E-Gym (correspondin
 
 Furthermore, to support training across different SWE datasets, you must ensure the relevant dataset libraries are installed when initializing Ray via the `run_ppo_agent` function in `./DeepSWE_RL/rllm/rllm/trainer/verl/train_agent_ppo.py` (Alternatively, these can be pre-installed during the initial environment setup).
 
-### Data Processing (Optional)
+#### Data Processing (Optional)
 If your training server operates in an offline environment (no internet access), you must [pre-process the unit tests for the specific SWE datasets](#offline-unit-test-generation-optional) and then standardize their formats:
 ```bash
 # Standardize the format
@@ -344,7 +326,7 @@ python ./data_preparation/make_test_spec_for_rl.py
 An example of processed data ready for RL training can be found here for formatting reference: 
 `./data_examples/rl_data/ood_data`
 
-### Training
+#### Training
 ```bash
 bash .DeepSWE_RL/rllm/examples/swe/run_swe_rl.sh
 ```
