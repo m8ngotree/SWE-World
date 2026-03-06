@@ -17,7 +17,19 @@
 + [4 Feb 2026] ⚡️⚡️ [**SWE-World**](https://arxiv.org/pdf/2602.03419): We introduce SWE-World, a fully Docker-free framework that replaces physical execution environments with learned surrogates. It lifts Qwen2.5-Coder-32B from 6.2% to 55.0% on SWE-bench Verified via fully Docker-free agentic SFT and RL, and further attains 68.2% through test-time scaling (TTS@8).
 
 + [4 Feb 2026] ⚡️⚡️ [**SWE-Master**](https://arxiv.org/pdf/2602.03411): We introduce SWE-Master, a fully reproducible post-training framework for Qwen2.5-Coder-32B that integrates agentic SFT and RL to achieve 61.4% (Pass@1) and 70.8% (TTS@8) resolve rates on SWE-bench Verified. Meanwhile, the framework incorporates IDE-level capabilities during inference via LSP-driven tool.
+
+## Model Releases
+
+We release the SWE-World models on Hugging Face. The **SWE-World Transition Model (SWT)** and **SWE-World Reward Model (SWR)** are available at:
+
+- SWT: https://huggingface.co/RUC-AIBOX/SWE-World-SWT-32B-wo-cot  
+- SWR: https://huggingface.co/RUC-AIBOX/SWE-World-SWR-32B-w-cot  
+
+These models simulate step-level execution feedback (SWT) and final test rewards (SWR), enabling fully Docker-free training and evaluation of SWE agents in SWE-World.
+
 ---
+
+
 
 ## 💡 Overview
 SWE agents typically rely on containerized execution environments (e.g., Docker) to obtain step-level execution feedback and final unit-test results. While effective, Docker-based pipelines are expensive and brittle at scale. **SWE-World** replaces physical execution with a *learned surrogate world*: a sandbox lightweight handles file-system edits, an LLM-based **Transition Model (SWT)** simulates step-level execution feedback for commands that would otherwise require Docker, and an LLM-based **Reward Model (SWR)** acts as a virtual test runner that produces structured test feedback and a binary success signal. This enables **fully Docker-free** data generation, supervised fine-tuning (SFT), reinforcement learning (RL), and test-time scaling (TTS) for repository-level issue resolution.
@@ -147,16 +159,19 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 
 # Activate venv
+cd SWE-World/swe_world
+
 uv venv
 source .venv/bin/activate
+uv pip install "setuptools<70" wheel
 uv sync && uv pip install -e .
 
 # Install SWE dataset-related packages for inference
-uv pip install .swe_world/new_packages/swebench_fork_swegym-2.0.13-py3-none-any.whl
+uv pip install new_packages/swebench_fork_swegym-2.0.13-py3-none-any.whl
 
-uv pip install .swe_world/new_packages/swebench_fork_swerebench-4.0.3-py3-none-any.whl
+uv pip install new_packages/swebench_fork_swerebench-4.0.3-py3-none-any.whl
 
-uv pip install .swe_world/new_packages/swesmith-0.0.7-py3-none-any.whl
+uv pip install new_packages/swesmith-0.0.7-py3-none-any.whl
 ```
 
 ### Inference

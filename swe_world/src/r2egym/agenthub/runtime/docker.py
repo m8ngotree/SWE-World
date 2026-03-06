@@ -70,7 +70,7 @@ from kubernetes.stream import stream
 DEFAULT_NAMESPACE = "default"
 DOCKER_PATH = "/root/.venv/bin:/root/.local/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 DOCKER_TLS_VERIFY = "1"
-DOCKER_CERT_PATH = ""
+DOCKER_CERT_PATH = "" # you can change this to your docker cert path
 
 # 一些非agent修改的文件需要被跳过
 SKIP_FILES_COLLECT_CONTEXT = ["pyproject.toml"]

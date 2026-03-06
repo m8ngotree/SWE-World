@@ -1,0 +1,13 @@
+[
+    "Project-MONAI/MONAI",
+    "bokeh/bokeh",
+    "conan-io/conan",
+    "dask/dask",
+    "facebookresearch/hydra",
+    "getmoto/moto",
+    "iterative/dvc",
+    "modin-project/modin",
+    "pandas-dev/pandas",
+    "pydantic/pydantic",
+    "python/mypy"
+]

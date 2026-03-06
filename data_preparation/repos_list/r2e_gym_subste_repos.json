@@ -1,0 +1,13 @@
+[
+  "pandas-dev/pandas", 
+  "numpy/numpy", 
+  "biolab/orange3",
+  "python-pillow/Pillow",
+  "aio-libs/aiohttp",
+  "tornadoweb/tornado",
+  "scrapy/scrapy",
+  "Pylons/pyramid",
+  "nedbat/coveragepy",
+  "datalad/datalad",
+  "sympy/sympy"
+]

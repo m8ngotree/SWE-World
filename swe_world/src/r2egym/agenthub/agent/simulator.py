@@ -7,6 +7,7 @@ from typing import Dict, Any, Tuple, List, Optional
 from r2egym.agenthub.utils.log import get_logger
 from transformers import AutoTokenizer
 
+
 def safe_get_usage_prompt_tokens(resp: Any):
     """
     Try to fetch prompt tokens from litellm response, if available.
@@ -24,6 +25,7 @@ def safe_get_usage_prompt_tokens(resp: Any):
     except Exception:
         return None
 
+
 def safe_get_usage(resp: Any):
     """
     Try to fetch prompt tokens from litellm response, if available.
@@ -34,6 +36,7 @@ def safe_get_usage(resp: Any):
         return usage
     except Exception:
         return None
+
 
 def safe_load_yaml(yaml_path: str) -> Dict[str, Any]:
     import yaml
@@ -48,14 +51,16 @@ class SimulatorAgent:
     leveraging a rich context about the software engineering task.
     """
 
-    def __init__(self, simulator_config: List[Dict], logger=None, simulator_config_path: str = None, tokenizer_path: str = None):
+    def __init__(self, simulator_config: dict = None, logger=None, simulator_config_path: str = None, tokenizer_path: str = "/code/songhuatong/sft_models/qwen_25_32B_mixed_step_reward_30k_dockerllm_128k_json_format"):
         """
         Args:
-            simulator_config: A list of dicts, each containing 'model_name', 'base_url', and 'api_key'.
+            simulator_config: A dict containing two keys: 'swt' and 'swr'.
         """
-        self.simulator_config = simulator_config
+        simulator_config = simulator_config or {}
+        self.simulator_config = simulator_config.get("swt", [])
+        self.simulator_reward_config = simulator_config.get("swr", [])
+
         self.simulator_config_path = simulator_config_path
-        self.simulator_reward_config = []
         self.logger = logger if logger else get_logger("SimulatorAgent")
 
         if tokenizer_path:
@@ -63,14 +68,16 @@ class SimulatorAgent:
         else:
             self.tokenizer = None
 
-        if simulator_config_path: # 有path优先读取path的
-            print("using simupath")
-            config_data = safe_load_yaml(simulator_config_path).get('swt', [])
-            reward_config_data = safe_load_yaml(simulator_config_path).get('swr', [])
+        # ===== ONLY MODIFIED: swt/swr yaml keys =====
+        if simulator_config_path:  # 有path优先读取path的
+            yaml_data = safe_load_yaml(simulator_config_path)
+            config_data = (yaml_data or {}).get('swt', [])
+            reward_config_data = (yaml_data or {}).get('swr', [])
             if not config_data:
                 raise ValueError(f"No models found in {simulator_config_path}")
             self.simulator_config = config_data
             self.simulator_reward_config = reward_config_data
+        # ========================================================
 
         if not self.simulator_config:
             raise ValueError("simulator_config is empty! Cannot initialize SimulatorAgent.")
@@ -118,10 +125,10 @@ Be sure to use all the context provided, including any discrepancies between the
     def update_simulator_config(self):
         if not self.simulator_config_path:
             print("No simulator_config_path provided")
-            return  
+            return
         yaml_data = safe_load_yaml(self.simulator_config_path)
-        config_data = yaml_data.get('swt', [])
-        reward_config_data = yaml_data.get('swr', [])
+        config_data = (yaml_data or {}).get('swt', [])
+        reward_config_data = (yaml_data or {}).get('swr', [])
         if not config_data:
             print(f"No models found in {self.simulator_config_path}")
             return
@@ -131,17 +138,15 @@ Be sure to use all the context provided, including any discrepancies between the
         self.simulator_config = config_data
         self.simulator_reward_config = reward_config_data
 
-
     def _select_model_config(self) -> Tuple[str, str, str]:
         """
         Randomly selects a model configuration from the list.
         Returns: (model_name, base_url, api_key)
         """
         self.update_simulator_config() # 动态更新
-
         choice = random.choice(self.simulator_config)
         return choice["model_name"], choice.get("base_url"), choice.get("api_key")
-    
+
     def _select_reward_model_config(self) -> Tuple[str, str, str]:
         """
         Randomly selects a model configuration from the list.
@@ -165,7 +170,6 @@ Be sure to use all the context provided, including any discrepancies between the
         if len1 > len(ids):
             print(f"ha_trunc: {len1} -> {len(ids)}")
         else:
-            # print(f"not_trunc")
             pass
         out = self.tokenizer.decode(
             ids,
@@ -278,11 +282,8 @@ Remember: 5–10 bullet points, markdown "- " bullets, plain English, no extra c
         for attempt in range(max_retries):
             # [NEW] Select a model for this request
             current_model_name, current_base_url, current_api_key = self._select_model_config()
-            
+
             try:
-                # self.logger.info(
-                #     f"Querying LLM for initial analysis ({current_model_name}), attempt {attempt + 1}..."
-                # )
                 response = litellm.completion(
                     model=current_model_name,
                     messages=messages,
@@ -323,19 +324,19 @@ Remember: 5–10 bullet points, markdown "- " bullets, plain English, no extra c
         max_retries = 1
 
         sim_type = context.get("type")
-        
+
         # [NEW] Flags to control context size reduction
         include_original_content = True
         include_detailed_context = True # Controls initial_analysis and human_hints
 
         for attempt in range(max_retries):
             # --- [NEW] Build prompt dynamically inside the loop based on flags ---
-            
+
             # 1. Format the content of the files being executed
             exec_code_blocks = []
             for path, content in context.get('execution_code_content', {}).items():
                 exec_code_blocks.append(f"--- Content of `{path}` (the file being executed) ---\n\n{content}\n")
-            
+
             # 2. Format the original content of all modified files
             # [MODIFIED] Condition based on include_original_content
             if include_original_content:
@@ -350,7 +351,7 @@ Remember: 5–10 bullet points, markdown "- " bullets, plain English, no extra c
                 exec_code_block_str = "No explicit execution code content provided."
             else:
                 exec_code_block_str = "\n\n".join(exec_code_blocks)
-            
+
             # [MODIFIED] Determine content for analysis and hints based on include_detailed_context
             init_analysis = context.get('initial_analysis', 'No initial analysis provided.') if include_detailed_context else "(Omitted to reduce context length)"
             human_hints = "No hints provided."
@@ -361,16 +362,13 @@ Remember: 5–10 bullet points, markdown "- " bullets, plain English, no extra c
             command_to_simulate = context.get("command_to_simulate", "No command provided.")
             # 3. Assemble the full prompt
 
+
             init_analysis = self.encode_truncate_decode(init_analysis, max_tokens=5120) # 5k
             problem_statement = self.encode_truncate_decode(problem_statement, max_tokens=10240) # 10k
             command_to_simulate = self.encode_truncate_decode(command_to_simulate, max_tokens=5120) # 5k
             exec_code_block_str = self.encode_truncate_decode(exec_code_block_str, max_tokens=15360) # 15k
             agent_patch = self.encode_truncate_decode(agent_patch, max_tokens=15360) # 15k
             gold_patch = self.encode_truncate_decode(gold_patch, max_tokens=10240) # 10k
-            # p2p_str = self.encode_truncate_decode(p2p_str, max_tokens=5120) # 5k
-
-
-            # self.logger.info(f"original_content_str: {original_content_str}")
 
             user_prompt = f"""
 ### 1. Initial Analysis of the Problem
@@ -411,18 +409,12 @@ Based on all the context above, provide the simulated output for the given comma
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
-            # print(f"original user_prompt, len: {len(messages[1]['content'])}, content: {messages[1]['content']}")
-
-
-                    
-            # --- End of Prompt Construction ---
 
             # Select a model for this request
             current_model_name, current_base_url, current_api_key = self._select_model_config()
             print(f"current model: {current_model_name}, base_url: {current_base_url}, api_key: {current_api_key}")
-            
+
             try:
-                # self.logger.info(f"[{sim_type}]Querying simulator LLM ({current_model_name}), attempt {attempt + 1}...")
                 response = litellm.completion(
                     model=current_model_name,
                     messages=messages,
@@ -434,33 +426,24 @@ Based on all the context above, provide the simulated output for the given comma
                     num_retries=0
                 )
 
-
-
                 usage = safe_get_usage(response)
 
-                # self.logger.info(f"[{sim_type}]Simulator LLM usage: {usage}")
-                
                 response_content = response.choices[0].message.content # 原始的回复
-                
-                # self.logger.info(f"[{sim_type}]Simulator LLM response: {response_content}")
+
                 sim_result = json.loads(response_content.split("</think>")[-1]) # 对于thinking model原始的回复中可能包含think内容，这部分要去掉，才能json解析成功
 
                 stdout = sim_result.get("stdout", "")
                 stderr = sim_result.get("stderr", "")
                 exit_code = sim_result.get("exit_code", 1) # Default to 1 (error) if not provided
 
-                # [MODIFIED] The output format is now more structured for clarity in logs
-                # combined_output = f"--- SIMULATED STDOUT ---\n{stdout}\n\n--- SIMULATED STDERR ---\n{stderr}"
                 combined_output = f"[STDOUT]\n\n{stdout}\n\n[STDERR]\n\n{stderr}"
-                
+
                 self.logger.info(f"[{sim_type}]Simulator LLM processing time: {time.time() - start_time:.2f} seconds")
-                # return response_content, combined_output.strip(), 1
                 return response_content, combined_output.strip(), exit_code
 
             except Exception as e:
                 self.logger.error(f"[{sim_type}]Error processing simulator LLM response on attempt {attempt + 1}: {e}", exc_info=True)
                 if attempt == max_retries - 1:
-                    # error_message = f"[STDOUT]\n\n\n\n[STDERR]\n\nError: Simulator LLM failed to provide valid feedback. Details: {e}" 
                     error_message = f"[STDOUT]\n\n\n\n[STDERR]\n\nFailed to get environment feedback!" 
                     self.logger.info(f"[{sim_type}]Simulator LLM processing time (failed): {time.time() - start_time:.2f} seconds")
                     return error_message, error_message, -1
@@ -474,23 +457,17 @@ Based on all the context above, provide the simulated output for the given comma
 
                 if is_context_error:
                     self.logger.warning(f"[{sim_type}]Context window exceeded on attempt {attempt + 1}. Adjusting context for next attempt.")
-                    
+
                     if include_original_content:
-                        # 1st fallback: Remove original content
-                        # self.logger.info(f"[{sim_type}]Reducing context: Removing 'Original Content of Modified Files'.")
                         include_original_content = False
                         continue # Retry immediately
                     elif include_detailed_context:
-                        # 2nd fallback: Remove original content, initial analysis, and human hints
                         self.logger.info(f"[{sim_type}]Reducing context: Removing 'Initial Analysis' and 'Human Hints'.")
                         include_detailed_context = False
                         continue # Retry immediately
-                    
-                    # If we fall through here, we have no more context to remove, proceed to standard error handling
 
-                
                 time.sleep(0.5)
-        
+
 
     def get_reward_for_test_summary(self, summary: str, f2p_files: List[str], p2p_files: List[str]) -> Tuple[int, str, str]:
         """
@@ -525,8 +502,6 @@ Based on the summary, determine the final reward. Provide your answer in the req
             {"role": "user", "content": user_prompt}
         ]
 
-        
-        # self.logger.info(f"reward trimming time: {time_trim:.2f} seconds") 
         start_time = time.time()
         max_retries = 1
         for attempt in range(max_retries):
@@ -534,7 +509,6 @@ Based on the summary, determine the final reward. Provide your answer in the req
             current_model_name, current_base_url, current_api_key = self._select_model_config()
 
             try:
-                # self.logger.info(f"Querying reward-judge LLM, attempt {attempt + 1} using {current_model_name}...")
                 response = litellm.completion(
                     model=current_model_name,
                     messages=messages,
@@ -548,21 +522,17 @@ Based on the summary, determine the final reward. Provide your answer in the req
 
                 usage = safe_get_usage(response)
 
-                # self.logger.info(f"reward summary usage: {usage}")
-
                 response_content = response.choices[0].message.content
-                #self.logger.info(f"Reward-judge LLM raw response: {response_content}")
-                
+
                 sim_result = json.loads(response_content.split("</think>")[-1])
                 reward = int(sim_result.get("reward", 0))
                 reason = str(sim_result.get("reason", "No reason provided."))
-                
+
                 self.logger.info(f"Reward-judge LLM processing time: {time.time() - start_time:.2f} seconds")
                 return reward, response_content, reason
             except Exception as e:
                 self.logger.error(f"Error processing reward-judge LLM response on attempt {attempt + 1}: {e}")
                 if attempt == max_retries - 1:
-
                     self.logger.info(f"Reward-judge LLM processing time (failed): {time.time() - start_time:.2f} seconds")
                     return 0, f"Error: Reward-judge LLM failed. Details: {e}", f"Error: Reward-judge LLM failed. Details: {e}"
                 time.sleep(1)
@@ -612,21 +582,18 @@ The final structure MUST look conceptually like this:
 
 Be sure to use all the context provided, including any discrepancies between the agent's modifications and the gold standard patch, to generate the most accurate simulated output.
 """
-        # context = sample["context"]
-        # --- [NEW] Build a much richer user prompt from the detailed context ---
-            
-        # 1. Format the content of the files being executed
+
         exec_code_blocks = []
         for path, content in context.get('execution_code_content', {}).items():
             exec_code_blocks.append(f"--- Content of `{path}` (the file being executed) ---\n\n{content}\n")
-        
+
         if not exec_code_blocks:
             exec_code_block_str = "No explicit execution code content provided."
         else:
             exec_code_block_str = "\n\n".join(exec_code_blocks)
-            
+
         init_analysis = context.get("initial_analysis", "No initial analysis provided.")
-        
+
         problem_statement = context.get("problem_statement", "No problem description provided.")
         agent_patch = context.get("agent_patch", "No changes from the agent yet.")
         gold_patch = context.get("gold_patch", "No gold patch provided.")
@@ -651,7 +618,6 @@ Be sure to use all the context provided, including any discrepancies between the
         else:
             p2p_str = p2p
 
-
         init_analysis = self.encode_truncate_decode(init_analysis, max_tokens=5120) # 5k
         problem_statement = self.encode_truncate_decode(problem_statement, max_tokens=10240) # 10k
         command_to_simulate = self.encode_truncate_decode(command_to_simulate, max_tokens=5120) # 5k
@@ -659,8 +625,7 @@ Be sure to use all the context provided, including any discrepancies between the
         agent_patch = self.encode_truncate_decode(agent_patch, max_tokens=15360) # 15k
         gold_patch = self.encode_truncate_decode(gold_patch, max_tokens=10240) # 10k
         p2p_str = self.encode_truncate_decode(p2p_str, max_tokens=5120) # 5k
-            
-        # 3. Assemble the full prompt
+
         user_prompt = f"""
 ### 1. Initial Analysis of the Problem
 {init_analysis}
@@ -712,7 +677,9 @@ Your answer must include a `<think>...</think>` block containing your full reaso
         start_time = time.time()
         max_retries = 1
         for attempt in range(max_retries):
+            # ===== ONLY MODIFIED: reward selection uses swr config =====
             current_model_name, current_base_url, current_api_key = self._select_reward_model_config()
+            # ========================================================
             print(f"current model: {current_model_name}, base_url: {current_base_url}, api_key: {current_api_key}")
             try:
                 self.logger.info(
@@ -731,8 +698,6 @@ Your answer must include a `<think>...</think>` block containing your full reaso
 
                 usage = safe_get_usage(response)
 
-                # self.logger.info(f"[{sim_type}]Simulator LLM usage: {usage}")
-
                 response_content = response.choices[0].message.content or ""
                 self.logger.info(
                     f"Combined LLM raw response: {response_content}"
@@ -745,8 +710,6 @@ Your answer must include a `<think>...</think>` block containing your full reaso
                 except Exception as e:
                     print(f"注意这里reward模拟失败了一次！原因是：{e}；reward模型生成的内容是：{response_content}")
                     reward = -10086
-                # reason = str(sim_result.get("reason", "No reason provided."))
-
                 self.logger.info(
                     f"Combined test-report & reward LLM processing time: {time.time() - start_time:.2f} seconds"
                 )
@@ -762,7 +725,6 @@ Your answer must include a `<think>...</think>` block containing your full reaso
                     self.logger.info(
                         f"Combined test-report & reward LLM processing time (failed): {time.time() - start_time:.2f} seconds"
                     )
-                    # 兜底：返回空的 test_report 和 reward=0
                     return "", 0, error_msg
                 time.sleep(1)
 
@@ -819,25 +781,22 @@ Is the simulated result functionally equivalent to the real result? Provide your
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
         try:
-            # self.logger.info("Querying evaluation LLM for step execution...")
             response = litellm.completion(
-                model=self.llm_name, 
-                messages=messages, 
-                api_base=self.llm_base_url, 
-                temperature=0.6, 
+                model=self.llm_name,
+                messages=messages,
+                api_base=self.llm_base_url,
+                temperature=0.6,
                 response_format={"type": "json_object"},
                 api_key=self.llm_api_key
             )
             response_content = response.choices[0].message.content
-            # [MODIFIED] The returned JSON directly matches our needs
             evaluation_result = json.loads(response_content.split("</think>")[-1])
-            
-            # Ensure the required keys are present
+
             if 'is_success' not in evaluation_result or 'reason' not in evaluation_result:
                 raise ValueError("LLM response is missing required keys 'is_success' or 'reason'.")
-                
+
             return response_content, evaluation_result
-            
+
         except Exception as e:
             self.logger.error(f"Error querying evaluation LLM: {e}")
             return f"Error querying evaluation LLM: {e}", {"is_success": False, "reason": f"Error during LLM evaluation: {e}"}
@@ -852,3 +811,11 @@ Is the simulated result functionally equivalent to the real result? Provide your
             "reward_match": reward_match,
             "reason": f"Simulated reward ({sim_reward}) {'matches' if reward_match else 'does not match'} real reward ({real_reward})."
         }
+
+
+if __name__ == "__main__":
+    # Example usage
+    yaml_file = "src/simulation/models_yaml/example_world_models.yaml"
+    config = safe_load_yaml(yaml_file)
+
+    print(config)

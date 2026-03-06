@@ -255,20 +255,21 @@ def runagent(
         try:
             with open(simulator_yaml, 'r') as f:
                 config_data = yaml.safe_load(f)
-                simulator_config_list = config_data.get('models', [])
-                if not simulator_config_list:
+                if not config_data:
                      raise ValueError(f"No models found in {simulator_yaml}")
-                logger.info(f"Loaded {len(simulator_config_list)} models for simulation.")
+                logger.info(f"Loaded {len(config_data.get('swt', []))} SWT models and {len(config_data.get('swr', []))} SWR models for simulation.")
         except Exception as e:
             logger.error(f"Failed to load simulator YAML: {e}")
             raise e
 
+        print(1111111)
         # 1. Initialize the Simulator Agent with the loaded config list
         simulator_agent = SimulatorAgent(
-            simulator_config=simulator_config_list, # [NEW] Pass the list of models
+            simulator_config=config_data, # [NEW] Pass the list of models
             logger=logger,
             simulator_config_path=simulator_yaml
         )
+        print(22222222)
         
         # 2. Create EnvArgs-like object for SimulatedEnv
         class SimEnvArgs:
@@ -570,6 +571,7 @@ def runagent_multiple(
                 ip_used = ip
                 logger.info(f"{docker_image}条目中不带ip, 使用提前设定好的ip: {ip}")
                 logger.info(f"[{idx}/{len(ds_selected)}] 正在提交任务: {docker_image}")
+                logger.info(f"use_fn_calling: {use_fn_calling}")
             fut = executor.submit(
                 runagent,
                 ds=ds_entry,
