@@ -6,6 +6,12 @@ import random
 from typing import Dict, Any, Tuple, List, Optional
 from r2egym.agenthub.utils.log import get_logger
 from transformers import AutoTokenizer
+from r2egym.agenthub.environment.lang_utils import (
+    Language,
+    SWT_SYSTEM_PROMPTS,
+    SWR_SYSTEM_PROMPTS,
+    detect_language,
+)
 
 
 def safe_get_usage_prompt_tokens(resp: Any):
@@ -51,14 +57,27 @@ class SimulatorAgent:
     leveraging a rich context about the software engineering task.
     """
 
-    def __init__(self, simulator_config: dict = None, logger=None, simulator_config_path: str = None, tokenizer_path: str = "/code/songhuatong/sft_models/qwen_25_32B_mixed_step_reward_30k_dockerllm_128k_json_format"):
+    def __init__(
+        self,
+        simulator_config: dict = None,
+        logger=None,
+        simulator_config_path: str = None,
+        tokenizer_path: str = "/code/songhuatong/sft_models/qwen_25_32B_mixed_step_reward_30k_dockerllm_128k_json_format",
+        lang: Language = Language.PYTHON,
+    ):
         """
         Args:
             simulator_config: A dict containing two keys: 'swt' and 'swr'.
+            lang: Default programming language for this agent instance.
+                  Can be overridden per-call via the ``lang`` parameter on
+                  get_simulated_feedback / get_simulated_test_report_and_reward,
+                  or changed at any time via ``agent.lang = Language.JAVASCRIPT``.
         """
         simulator_config = simulator_config or {}
         self.simulator_config = simulator_config.get("swt", [])
         self.simulator_reward_config = simulator_config.get("swr", [])
+        # Language used to select the correct system prompts at inference time.
+        self.lang: Language = lang
 
         self.simulator_config_path = simulator_config_path
         self.logger = logger if logger else get_logger("SimulatorAgent")
@@ -82,45 +101,23 @@ class SimulatorAgent:
         if not self.simulator_config:
             raise ValueError("simulator_config is empty! Cannot initialize SimulatorAgent.")
 
-        # [MODIFIED] The system prompt is enhanced to guide the LLM on output formatting.
-        self.system_prompt = """You are an expert Python code execution simulator and a world-class software engineer. 
-Your task is to predict the output of a given Python command within a specific code repository context.
-Analyze all the provided information: the initial analysis, the problem description, human hints, the agent's current changes, the ideal "gold" solution, and the original content of the modified files.
+        # system_prompt is now derived from self.lang at call time via
+        # _get_swt_system_prompt() so it automatically adapts when self.lang
+        # is changed between calls.
 
-Your output MUST be a single JSON object containing 'stdout', 'stderr', and 'exit_code'. Do not add any explanations or text outside of this JSON block.
+    # ------------------------------------------------------------------
+    # Language-aware prompt helpers
+    # ------------------------------------------------------------------
 
-### Key Information You Must Use:
-1. **Initial Analysis of the Problem**: This section contains a core analysis of the issue, including the description of the error behavior, the core bug, how the issue manifests, and the intended fix. It is crucial to understanding the problem and will guide the simulation process. Use this to help you quickly identify the issue and how it should be addressed.
+    def _get_swt_system_prompt(self, lang: Language = None) -> str:
+        """Return the SWT system prompt for *lang* (falls back to self.lang)."""
+        effective_lang = lang if lang is not None else self.lang
+        return SWT_SYSTEM_PROMPTS.get(effective_lang, SWT_SYSTEM_PROMPTS[Language.PYTHON])
 
-2. **Problem Description**: This section describes the specific issue the agent is currently working on and trying to fix. Use this to understand the exact problem the agent is attempting to resolve.
-
-3. **Command to Simulate**: This is the command that will be executed. It contains all the information about what needs to be run, including the files to be executed and any other relevant details. Use this to simulate the execution and generate the correct output. If the "Content of Code to be Executed" is empty, the code is embedded within the command itself.
-
-4. **Content of Code to be Executed**: This is the actual code that will be executed. Pay close attention to this content as the simulated output must strictly correspond to the code being executed. If this section is empty, the specific code to execute is provided in the "Command to Simulate" section.
-
-5. **Agent's Current Code Modifications (Patch)**: This section highlights the changes that the agent has made to the codebase. These changes are the ones you need to analyze carefully to simulate the feedback. Focus on these modifications when generating your simulated output.
-
-6. **Gold Standard Patch (For Your Reference)**: This is the correct solution to the issue. You should compare the agent's current changes with the gold standard solution to ensure that the simulated result is as accurate as possible. If the agent's patch is **functionally equivalent** to the gold patch (i.e., it resolves the issue in the same way), then the simulation feedback should match the expected output as defined by the gold standard.
-
-### Your Task:
-- Use all the above information to generate the most realistic and accurate simulated output.
-- For commands that reproduce errors (e.g., `python reproduce_issue.py`), refer to the **Initial Analysis of the Problem** and the **Problem Description** to understand the nature of the error. Then, simulate the result based on the actual code content and the problem analysis.
-- For test commands (e.g., commands that include `pytest`), carefully compare the agent's modifications with the gold standard patch. If the tests are "FAIL_TO_PASS" tests, analyze whether the agent's changes fix the issue as described in the tests. For "PASS_TO_PASS" tests, ensure that the agent's changes do not break existing functionality.
-- It is important to note that the execution result must strictly follow the current code content being executed, and no fabricated test output should be added. The same test case may have multiple versions, and the test content may change across versions. Therefore, each case should be analyzed specifically based on its content.
-- Your simulated output should reflect the most likely and realistic results of the command execution based on the context provided. Be precise and clear in your simulated outputs, focusing on realistic error messages, test outputs, or successful execution results.
-
-### Format of the Output:
-- **stdout**: The standard output of the command, if applicable. For example, in the case of a test run, this should reflect the results of the tests, such as which tests passed or failed.
-- **stderr**: Any error messages that might be produced by the command. For example, if the command produces a syntax error or another exception, this should contain the appropriate traceback or error message.
-- **exit_code**: The exit code of the command. `0` indicates success, while `1` (or any other non-zero value) indicates failure.
-
-### Example Scenarios:
-- **Successful Command Execution**: If the command executes successfully, `stdout` should contain the output generated by executing the code, and `exit_code` should be `0`. Ensure that the output corresponds directly to the expected result of the executed code.
-- **Runtime Error (e.g., SyntaxError)**: If there is a runtime error, such as a syntax error, the `stderr` should contain the error traceback, and `exit_code` should be `1`.
-- **Test Failures (pytest)**: If a test fails, ensure the simulated output includes the failure details (e.g., pytest output) and an appropriate `exit_code`.
-
-Be sure to use all the context provided, including any discrepancies between the agent's modifications and the gold standard patch, to generate the most accurate simulated output.
-"""
+    def _get_swr_system_prompt(self, lang: Language = None) -> str:
+        """Return the SWR system prompt for *lang* (falls back to self.lang)."""
+        effective_lang = lang if lang is not None else self.lang
+        return SWR_SYSTEM_PROMPTS.get(effective_lang, SWR_SYSTEM_PROMPTS[Language.PYTHON])
 
     def update_simulator_config(self):
         if not self.simulator_config_path:
@@ -316,9 +313,14 @@ Remember: 5–10 bullet points, markdown "- " bullets, plain English, no extra c
                 time.sleep(1)
 
 
-    def get_simulated_feedback(self, context: Dict[str, Any]) -> Tuple[str, str, int]:
+    def get_simulated_feedback(self, context: Dict[str, Any], lang: Language = None) -> Tuple[str, str, int]:
         """
-        Queries the LLM to get simulated feedback for a Python command.
+        Queries the LLM to get simulated step-level feedback.
+
+        Args:
+            context: The simulation context dict (see SimulatedEnv).
+            lang:    Override the programming language for this call.
+                     Defaults to self.lang set at construction / reset time.
         """
         start_time = time.time()
         max_retries = 1
@@ -406,7 +408,7 @@ Based on all the context above, provide the simulated output for the given comma
 """
 
             messages = [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": self._get_swt_system_prompt(lang)},
                 {"role": "user", "content": user_prompt}
             ]
 
@@ -538,50 +540,16 @@ Based on the summary, determine the final reward. Provide your answer in the req
                 time.sleep(1)
 
 
-    def get_simulated_test_report_and_reward(self, context: Dict[str, Any]) -> Tuple[str, int, str]:
-        system_prompt = """You are an expert software engineering test runner and evaluator.
-Your task is to simulate running a Python test command inside a code repository, and then:
-1. A reasoning section enclosed within `<think>` and `</think>` tags that contains your full internal reasoning process.
-2. Produce a realistic test report summarizing which tests pass or fail.
-3. Decide a final reward value based on the status of specific tests.
+    def get_simulated_test_report_and_reward(self, context: Dict[str, Any], lang: Language = None) -> Tuple[str, int, str]:
+        """
+        Queries the SWR model to obtain a simulated test report and binary reward.
 
-### Key Information You Must Use:
-1. **Initial Analysis of the Problem**: This section contains a core analysis of the issue, including the description of the error behavior, the core bug, how the issue manifests, and the intended fix. It is crucial to understanding the problem and will guide the simulation process. Use this to help you quickly identify the issue and how it should be addressed.
-
-2. **Problem Description**: This section describes the specific issue the agent is currently working on and trying to fix. Use this to understand the exact problem the agent is attempting to resolve.
-
-3. **Command to Simulate**: This is the command that will be executed. It contains all the information about what needs to be run, including the files to be executed and any other relevant details. Use this to simulate the execution and generate the correct output. If the "Content of Code to be Executed" is empty, the code is embedded within the command itself.
-
-4. **Content of Code to be Executed**: This is the actual code that will be executed. Pay close attention to this content as the simulated output must strictly correspond to the code being executed. If this section is empty, the specific code to execute is provided in the "Command to Simulate" section.
-
-5. **Agent's Current Code Modifications (Patch)**: This section highlights the changes that the agent has made to the codebase. These changes are the ones you need to analyze carefully to simulate the feedback. Focus on these modifications when generating your simulated output.
-
-6. **Gold Standard Patch (For Your Reference)**: This is the correct solution to the issue. You should compare the agent's current changes with the gold standard solution to ensure that the simulated result is as accurate as possible. If the agent's patch is **functionally equivalent** to the gold patch (i.e., it resolves the issue in the same way), then the simulation feedback should match the expected output as defined by the gold standard.
-
-7. **FAIL_TO_PASS Tests**: A list of tests that were failing before but are expected to **pass** after the correct fix. For the reward to be 1, **every** test in this list must pass.
-
-8. **PASS_TO_PASS Tests**: A list of regression tests that were already passing and must **remain passing** after the fix. For the reward to be 1, **every** test in this list must pass.
-
-### Your Task
-Given all of the above context:
-* Simulate the execution of the command under the current agent patch.
-* Focus especially on the tests in FAIL_TO_PASS and PASS_TO_PASS:
-  - If **all** FAIL_TO_PASS tests pass and **all** PASS_TO_PASS tests pass, then the reward **must be 1**.
-  - If **any** FAIL_TO_PASS test fails or errors, the reward **must be 0**.
-  - If **any** PASS_TO_PASS test fails or errors, the reward **must be 0**.
-
-### Output Format
-- **Reasoning (`<think>` block)**: First, provide your detailed internal reasoning, analysis, and step-by-step thought process enclosed within `<think>` and `</think>` tags. This section explains how you arrived at the simulated result.
-- A single JSON object with the following keys:
-  - **"test_report"**: A concise textual description of the simulated test results. Mention which FAIL_TO_PASS and PASS_TO_PASS tests pass or fail, and any important errors.
-  - **"reward"**: An integer, either 0 or 1, following the rules above.
-
-The final structure MUST look conceptually like this:
-`<think> ...your full reasoning process here... </think>
-{"test_report": "...", "reward": 0/1}`
-
-Be sure to use all the context provided, including any discrepancies between the agent's modifications and the gold standard patch, to generate the most accurate simulated output.
-"""
+        Args:
+            context: The simulation context dict.
+            lang:    Override the programming language for this call.
+                     Defaults to self.lang set at construction / reset time.
+        """
+        system_prompt = self._get_swr_system_prompt(lang)
 
         exec_code_blocks = []
         for path, content in context.get('execution_code_content', {}).items():

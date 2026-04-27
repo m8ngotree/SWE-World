@@ -6,7 +6,20 @@ import os
 
 import shlex
 
-PYTHON_CMD_PATTERN = re.compile(r'\b(python\d*|pytest)\b')
+# ---------------------------------------------------------------------------
+# Language-aware utilities — single source of truth in lang_utils.
+# PYTHON_CMD_PATTERN is kept as a local alias for backward compatibility.
+# ---------------------------------------------------------------------------
+from r2egym.agenthub.environment.lang_utils import (
+    CMD_PATTERNS,
+    Language,
+    detect_language,
+    is_execution_command,
+    is_python_execution_command,
+    extract_test_report as _lang_extract_test_report,
+)
+
+PYTHON_CMD_PATTERN = CMD_PATTERNS[Language.PYTHON]
 
 
 from typing import Tuple
@@ -64,71 +77,14 @@ def trim_test_report_trailing_noise(
     return trimmed_report, True
 
 
-def extract_test_report(log: str) -> Tuple[bool, str, str]:
+def extract_test_report(log: str, lang: Language = Language.PYTHON) -> Tuple[bool, str, str]:
     """
-    从完整日志字符串中提取 test_report。
+    Language-aware test report extractor — thin wrapper around lang_utils.
 
-    返回:
-        (success: bool, reason: str, test_report: str)
-        - success: 是否成功提取
-        - reason: 若失败，英文原因描述；成功时通常为空字符串
-        - test_report: 提取到的测试报告内容（原样）
+    Returns:
+        (success, reason, test_report)
     """
-    # 1. 检查是否有超时错误
-    timeout_marker = "The command took too long to execute"
-    if timeout_marker in log:
-        return False, "Timeout: command took too long to execute.", ""
-
-    # 2. 查找测试开始标识
-    start_marker = "============================= test session starts =============================="
-    lines = log.splitlines(keepends=True)  # 保留换行符，方便原样拼接
-    start_idx = -1
-    for i, line in enumerate(lines):
-        if start_marker in line:
-            start_idx = i
-            break
-
-    if start_idx == -1:
-        return False, "Start marker not found.", ""
-
-    end_idx = None
-
-    # 3. 从后往前找结束标识
-
-    # 3.1 若包含 '>>>>> End Test Output'，则该行的前一行是结尾
-    end_output_marker = ">>>>> End Test Output"
-    for j in range(len(lines) - 1, -1, -1):
-        if end_output_marker in lines[j]:
-            if j - 1 >= start_idx:
-                end_idx = j - 1
-                break
-
-    # 3.2 如果还没找到，看看是否有 '+ git checkout '，该行前一行为结尾
-    if end_idx is None:
-        git_checkout_marker = "+ git checkout "
-        for j in range(len(lines) - 1, -1, -1):
-            if git_checkout_marker in lines[j]:
-                if j - 1 >= start_idx:
-                    end_idx = j - 1
-                    break
-
-    # 3.3 如果还没找到，找最后一个包含 '==================' 的行，该行就是结尾
-    if end_idx is None:
-        equal_line_marker = "===="
-        for j in range(len(lines) - 1, -1, -1):
-            if equal_line_marker in lines[j]:
-                if j >= start_idx:
-                    end_idx = j
-                    break
-
-    # 3.4 如果仍然没有找到结束位置，则失败
-    if end_idx is None or end_idx < start_idx:
-        return False, "No valid end marker found.", ""
-
-    # 4. 拼接 test_report
-    test_report = "".join(lines[start_idx:end_idx + 1])
-
-    return True, "", test_report
+    return _lang_extract_test_report(log, lang=lang)
 
 
 def has_inline_code(code: str) -> bool:
@@ -177,44 +133,8 @@ def has_inline_code(code: str) -> bool:
     return False
 import random
 
-def is_python_execution_command(code: str) -> bool:
-    """
-    判断当前 code 是否是需要收集数据的“python 执行命令”。
-
-    条件：
-    1. 必须以 execute_bash 开头
-    2. 不能包含 pip install（不区分大小写）
-    3. 必须匹配 PYTHON_CMD_PATTERN（包含 python/pytest 等）
-    """
-    if not code:
-        return False
-
-    # SKIP_COMMANDS = ["sed ", "find ", "cp ", "chmod ", "ls ", "git ", "cat ", "mv "]
-    SKIP_COMMANDS = ["git "]
-
-    stripped = code.strip()
-
-    # 1. 不能包含 git / sed / find / cp / chmod / ls 等
-    if any(skip_cmd in stripped for skip_cmd in SKIP_COMMANDS):
-        return False
-
-    # 2. 必须以 execute_bash 开头
-    if not stripped.startswith("execute_bash"):
-        return False
-
-    # 3. 不能包含 pip install（不区分大小写）
-    lowered = stripped.lower()
-    if "pip install" in lowered:
-        return False
-
-    if "python3 " in stripped:
-        return True
-    
-    if "python " in stripped:
-        return True
-
-    # 4. 必须包含 python（或你在 PYTHON_CMD_PATTERN 里定义的命令）
-    return bool(PYTHON_CMD_PATTERN.search(stripped))
+# is_python_execution_command is imported from lang_utils at the top of this
+# file.  The local definition is removed to avoid divergence.
 
 def parse_command_output(output_string):
     """
@@ -307,10 +227,15 @@ def get_simulated_feedback(sample):
         context = sample["context"]
         # --- [NEW] Build a much richer user prompt from the detailed context ---
         
-        # 根据command进行过滤一些数据
+        # Detect language from context (instance_id contains repo info when available)
+        instance_id = sample.get("instance_id", "")
+        repo_name = context.get("repo", instance_id.split("__")[0] if "__" in instance_id else "")
+        sample_lang = detect_language(repo_name=repo_name)
+
+        # Filter: only simulate execution commands for the detected language
         command = context.get('command_to_simulate', 'No command provided.')
-        if not is_python_execution_command(command):
-            print(f"Not a python execution command: [{command}], skip this sample")
+        if not is_execution_command(command, lang=sample_lang):
+            print(f"Not an execution command [{sample_lang.name}]: [{command}], skip this sample")
             use_flag = False
             return None, use_flag
         
@@ -399,7 +324,12 @@ def get_simulated_test_report_and_reward(
         real_output = sample["real_output"]
         real_reward = sample["real_reward"]
 
-        is_success, fail_reason, test_report = extract_test_report(real_output)
+        # Detect language for this sample (same logic as get_simulated_feedback)
+        instance_id = sample.get("instance_id", "")
+        repo_name = context.get("repo", instance_id.split("__")[0] if "__" in instance_id else "")
+        sample_lang = detect_language(repo_name=repo_name)
+
+        is_success, fail_reason, test_report = extract_test_report(real_output, lang=sample_lang)
         test_report = test_report.rstrip()
         if is_success:
             if not test_report.endswith("="):

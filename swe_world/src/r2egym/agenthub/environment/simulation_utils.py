@@ -17,48 +17,20 @@ from typing import Tuple, List, Set, Optional
 # 为了从patch中解析到修改的文件
 from swebench.harness.utils import get_modified_files
 
-# Helper function from the previous response
-# \b ensures we match whole words only (e.g., 'python', not 'my-python-script').
-PYTHON_CMD_PATTERN = re.compile(r'\b(python\d*|pytest)\b')
+# ---------------------------------------------------------------------------
+# Language-aware command patterns — imported from lang_utils (single source of
+# truth).  PYTHON_CMD_PATTERN is kept as an alias for backward compatibility
+# with any code that imports it directly from this module.
+# ---------------------------------------------------------------------------
+from r2egym.agenthub.environment.lang_utils import (
+    CMD_PATTERNS,
+    Language,
+    detect_language,
+    is_execution_command,
+    is_python_execution_command,
+)
 
-def is_python_execution_command(code: str) -> bool:
-    """
-    判断当前 code 是否是需要收集数据的“python 执行命令”。
-
-    条件：
-    1. 必须以 execute_bash 开头
-    2. 不能包含 pip install（不区分大小写）
-    3. 必须匹配 PYTHON_CMD_PATTERN（包含 python/pytest 等）
-    """
-    if not code:
-        return False
-
-    # SKIP_COMMANDS = ["sed ", "find ", "cp ", "chmod ", "ls ", "git ", "cat ", "mv "]
-    SKIP_COMMANDS = ["git "]
-
-    stripped = code.strip()
-
-    # 1. 不能包含 git / sed / find / cp / chmod / ls 等
-    if any(skip_cmd in stripped for skip_cmd in SKIP_COMMANDS):
-        return False
-
-    # 2. 必须以 execute_bash 开头
-    if not stripped.startswith("execute_bash"):
-        return False
-
-    # 3. 不能包含 pip install（不区分大小写）
-    lowered = stripped.lower()
-    if "pip install" in lowered:
-        return False
-
-    if "python3 " in stripped:
-        return True
-    
-    if "python " in stripped:
-        return True
-
-    # 4. 必须包含 python（或你在 PYTHON_CMD_PATTERN 里定义的命令）
-    return bool(PYTHON_CMD_PATTERN.search(stripped))
+PYTHON_CMD_PATTERN = CMD_PATTERNS[Language.PYTHON]
 
 
 def _get_files_from_patch(patch_text: str) -> set:
@@ -121,15 +93,28 @@ def _rewrite_testbed_paths(full_command_str: str, repo_path: str) -> str:
     return " ".join(shlex.quote(x) for x in new_parts)
 
 
-def _parse_test_script(script_content: str, repo_path: str = "/testbed", is_sim: bool = True) -> Tuple[List[str], str]:
+def _parse_test_script(
+    script_content: str,
+    repo_path: str = "/testbed",
+    is_sim: bool = True,
+    lang: "Language" = None,
+) -> Tuple[List[str], str]:
     """
-    [NEW] Intelligently parses a run_tests.sh script to extract setup commands
-    and the final pytest command, correctly handling here-documents for git apply.
+    Intelligently parses a run_tests.sh script to extract setup commands
+    and the final test command, correctly handling here-documents for git apply.
+
+    The ``lang`` parameter selects the command pattern used to identify the
+    test invocation line.  Defaults to Language.PYTHON for backward compatibility.
     """
+    if lang is None:
+        lang = Language.PYTHON
+
+    test_cmd_pattern = CMD_PATTERNS[lang]
+
     lines = script_content.split('\n')
     setup_commands = [f"cd {repo_path}"]
-    pytest_command = None
-    
+    test_command = None
+
     in_here_document = False
     here_doc_marker = None
     current_command_block = []
@@ -137,11 +122,16 @@ def _parse_test_script(script_content: str, repo_path: str = "/testbed", is_sim:
     for line in lines:
         stripped_line = line.strip()
 
-        if "pytest" in stripped_line: # 如果包含pytest，说明前期准备完成，后面的全部可以跳过
-            pytest_command = stripped_line
+        # Fast-path: pytest keyword (kept for Python backward compat)
+        if lang == Language.PYTHON and "pytest" in stripped_line:
+            test_command = stripped_line
             break
 
-        
+        # General: match language-specific pattern
+        if test_cmd_pattern.search(stripped_line):
+            test_command = stripped_line
+            break
+
         if " /testbed" in stripped_line and is_sim:
             stripped_line = _rewrite_testbed_paths(stripped_line, repo_path)
 
@@ -157,8 +147,8 @@ def _parse_test_script(script_content: str, repo_path: str = "/testbed", is_sim:
         if not stripped_line or stripped_line.startswith(('#', ':', 'source', 'conda', 'pip')):
             continue
 
-        if PYTHON_CMD_PATTERN.search(stripped_line):
-            pytest_command = stripped_line # Assume the last python/pytest command is the one we want
+        if test_cmd_pattern.search(stripped_line):
+            test_command = stripped_line  # Assume the last match is the one we want
             continue
 
         if stripped_line.startswith(('git', 'cd')):
@@ -170,11 +160,11 @@ def _parse_test_script(script_content: str, repo_path: str = "/testbed", is_sim:
                     here_doc_marker = marker
                     current_command_block.append(stripped_line)
                 except IndexError:
-                    setup_commands.append(stripped_line) # Malformed here-doc, treat as normal command
+                    setup_commands.append(stripped_line)  # Malformed, treat as normal
             else:
                 setup_commands.append(stripped_line)
-    
-    return setup_commands, pytest_command
+
+    return setup_commands, test_command
 
 
 

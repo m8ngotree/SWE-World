@@ -16,6 +16,7 @@ from r2egym.agenthub.runtime.local import LocalRuntime
 from r2egym.agenthub.agent.simulator import SimulatorAgent
 from r2egym.agenthub.agent.commands import Command, ParseCommand, ParseCommandBash
 from r2egym.agenthub import SUPPORTED_REPOS, SKIP_FILES, SKIP_FILES_NEW, CMD_TIMEOUT
+from r2egym.agenthub.environment.lang_utils import Language, detect_language
 from r2egym.agenthub.utils.log import get_logger
 
 from r2egym.agenthub.runtime.docker import (
@@ -1110,6 +1111,8 @@ class SimulatedEnv(gym.Env):
     def reset(self) -> Observation:
         """
         Resets the underlying local runtime and returns an initial observation.
+        Also detects the repository language and updates the simulator so that
+        the correct SWT/SWR system prompts are used for this episode.
         """
         self.logger.info("Resetting SimulatedEnv...")
         if self.runtime:
@@ -1118,8 +1121,17 @@ class SimulatedEnv(gym.Env):
         self.runtime = LocalRuntime(ds=self.args.ds, logger=self.logger)
         self.done = False
 
+        # Detect language from the repo field in the dataset entry and inform
+        # the simulator so it uses the right system prompts.
+        repo_name = self.args.ds.get("repo", "")
+        detected_lang = detect_language(repo_name=repo_name)
+        self.simulator.lang = detected_lang
+        self.logger.info(
+            f"Reset done. Local repo at: {self.runtime.repo_path}  "
+            f"[language={detected_lang.name}]"
+        )
+
         initial_obs_text = "Environment reset. Workspace is ready."
-        self.logger.info(f"Reset done. Local repo at: {self.runtime.repo_path}")
         self.observation = Observation(initial_obs_text, 0, Action("reset", {}))
 
         self.collected_contexts = []
